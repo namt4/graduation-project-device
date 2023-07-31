@@ -54,7 +54,7 @@ typedef enum {
     EFFECT_RAINBOW,
     EFFECT_WAVEFORM,
     EFFECT_FLASMA_WAVE,
-    WIFI_DISCONNECT
+    TEMPERATURE_COLOR
 } effect_t;
 //char *updated_json_data = "{\"state\": \"on\", \"brightness\": 255, \"color\": [255, 255, 255], \"effect\": \"none\"}";
 esp_mqtt_client_handle_t client;
@@ -219,6 +219,9 @@ void mqtt_handle_data(char* json_data)
         // esp_mqtt_client_publish(client, "home/rgb1/status", json_data, 0, 0, 0);
     } else if (strncmp(light_data.effect, "waveform", 8) == 0) {
         currentEffect = EFFECT_WAVEFORM;
+        update_json_value(light_data, json_data);
+    } else if (strncmp(light_data.effect, "temperature color", 17) == 0) {
+        currentEffect = TEMPERATURE_COLOR;
         update_json_value(light_data, json_data);
     }
 }
@@ -390,16 +393,15 @@ void ws2812_task(void* pvParameters)
             }
             ws2812_clear_led();
             break;
-        case WIFI_DISCONNECT:
+        case TEMPERATURE_COLOR:
+            for (int i = 0; i < 8; i++) {
+                ws2812_set_pixel(i, light_data.color[0] * light_data.brightness / 255, light_data.color[1] * light_data.brightness / 255, light_data.color[2] * light_data.brightness / 255);
+            }
+            ws2812_set_refresh();
             if (count % 100 == 0) {
-                printf("WIFI_DISCONNECT\n");
+                printf("TEMPERATURE_COLOR\n");
                 // printf("RGB value: %x\n", new_state.leds[0]);
             }
-            for (int i = 0; i < 8; i++){
-                ws2812_write_led(i, 255, 255, 255);
-            }
-            vTaskDelay(pdMS_TO_TICKS(2000));
-            ws2812_clear_led();
             break;
         default:
             break;
@@ -599,7 +601,7 @@ void wifi_led_task(void* pvParameters)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "[APP] Startup..");
+    /* ESP_LOGI(TAG, "[APP] Startup..");
     ESP_LOGI(TAG, "[APP] Free memory: %d bytes", esp_get_free_heap_size());
     ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
 
@@ -609,7 +611,7 @@ void app_main(void)
     esp_log_level_set("TRANSPORT_BASE", ESP_LOG_VERBOSE);
     esp_log_level_set("TRANSPORT_WS", ESP_LOG_VERBOSE);
     esp_log_level_set("TRANSPORT", ESP_LOG_VERBOSE);
-    esp_log_level_set("OUTBOX", ESP_LOG_VERBOSE);
+    esp_log_level_set("OUTBOX", ESP_LOG_VERBOSE); */
 
     ESP_ERROR_CHECK(nvs_flash_init());
     //ESP_ERROR_CHECK(esp_netif_init());
@@ -634,10 +636,10 @@ void app_main(void)
 
     ws2812_init(18, 8);
     mqtt_app_start();
+    ESP_ERROR_CHECK(i2cdev_init());
 
     xTaskCreate(wifi_led_task, "wifi_led_task", 2048, NULL, 1, NULL);
     xTaskCreate(ws2812_task, "ws2810_task", 2048, NULL, 1, NULL);
-    ESP_ERROR_CHECK(i2cdev_init());
     xTaskCreatePinnedToCore(bme680_task, "bme680_task", configMINIMAL_STACK_SIZE * 8, NULL, 1, NULL, 0);
     //memset(&light_data, 0, sizeof(rgb_light));
     
